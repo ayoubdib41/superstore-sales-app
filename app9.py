@@ -1,14 +1,12 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import joblib
 
-# Chargement des modèles et scaler
-model_sales = joblib.load('model_sales.joblib')
-model_quantity = joblib.load('model_quantity.joblib')
-scaler = joblib.load('scaler.joblib')
+# -------------------- CONFIGURATION --------------------
+st.set_page_config(page_title="🎯 Prédiction des Ventes", layout="wide")
+st.title("📊 Application de Prédiction des Ventes et Quantités")
 
-# Colonnes one-hot utilisées à l'entraînement (à adapter selon ton encodage réel)
+# -------------------- DONNÉES DE BASE --------------------
 category_options = ['Furniture', 'Office Supplies', 'Technology']
 subcategory_options = [
     'Bookcases', 'Chairs', 'Tables', 'Appliances', 'Binders', 'Paper', 'Phones',
@@ -17,52 +15,32 @@ subcategory_options = [
 ]
 region_options = ['East', 'West', 'Central', 'South']
 
-# Fonction de prédiction
-def predict_sales_quantity(input_data):
-    input_df = pd.DataFrame([input_data])
-
-    # Compléter les colonnes manquantes
-    all_columns = scaler.feature_names_in_
-    for col in all_columns:
-        if col not in input_df.columns:
-            input_df[col] = 0
-
-    input_df = input_df[all_columns]
-    input_scaled = scaler.transform(input_df)
-
-    pred_sales = np.expm1(model_sales.predict(input_scaled)[0])
-    pred_quantity = np.expm1(model_quantity.predict(input_scaled)[0])
-    return pred_sales, pred_quantity
-
-# UI Streamlit
-st.set_page_config(page_title="🎯 Prédiction des Ventes", layout="wide")
-st.title("📊 Application de Prédiction des Ventes et Quantités")
-
+# -------------------- PARTIE 1 : CHOIX TEMPOREL --------------------
 st.markdown("### 🧠 Partie 1 : Choix du type de prédiction temporelle")
 temp_choice = st.selectbox("Niveau de granularité temporelle :", ["Année", "Année + Mois", "Jour complet"])
 
-# Champs temporels dynamiques
 order_year = order_month = order_week = order_day = None
 
 if temp_choice == "Année":
-    order_year = st.selectbox("Année", [2018, 2019, 2020])
+    order_year = st.selectbox("Année", list(range(2018, 2027)))
 elif temp_choice == "Année + Mois":
     col1, col2 = st.columns(2)
     with col1:
-        order_year = st.selectbox("Année", [2015, 2016, 2017])
+        order_year = st.selectbox("Année", list(range(2018, 2027)))
     with col2:
         order_month = st.slider("Mois", 1, 12, 6)
 elif temp_choice == "Jour complet":
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        order_year = st.selectbox("Année", [2015, 2016, 2017])
+        order_year = st.selectbox("Année", list(range(2018, 2027)))
     with col2:
         order_month = st.slider("Mois", 1, 12, 6)
     with col3:
         order_week = st.slider("Semaine", 1, 52, 26)
     with col4:
-        order_day = st.slider("Jour de semaine (0=Lundi)", 0, 6, 0)
+        order_day = st.slider("Jour de semaine", 0, 6, 0)
 
+# -------------------- PARTIE 2 : TYPE DE PRODUIT --------------------
 st.markdown("### 📦 Partie 2 : Type de produit")
 product_choice = st.radio("Filtrer les produits par :", ["Tous les produits", "Par catégorie", "Par sous-catégorie"])
 
@@ -77,6 +55,7 @@ elif product_choice == "Par sous-catégorie":
     with col2:
         subcategory = st.selectbox("Sous-catégorie", subcategory_options)
 
+# -------------------- INFORMATIONS COMPLÉMENTAIRES --------------------
 st.markdown("### 📌 Informations complémentaires")
 col1, col2, col3 = st.columns(3)
 
@@ -87,13 +66,59 @@ with col2:
 with col3:
     delivery_duration = st.number_input("Durée de livraison (jours)", min_value=0, step=1)
 
-# Bouton prédiction
-if st.button("📈 Prédire les Ventes et Quantités"):
+# -------------------- SIMULATION LOGIQUE --------------------
+def simulate_sales_quantity(category, subcategory, temp_choice, product_choice):
+    expensive_subcategories = ['Copiers', 'Phones', 'Machines']
+    
+    if subcategory:
+        if subcategory in expensive_subcategories:
+            price = np.random.uniform(500, 2000)
+            quantity = np.random.randint(1, 5)
+        else:
+            price = np.random.uniform(20, 200)
+            quantity = np.random.randint(1, 10)
+    elif category:
+        if category == 'Technology':
+            price = np.random.uniform(300, 1500)
+            quantity = np.random.randint(1, 6)
+        elif category == 'Furniture':
+            price = np.random.uniform(100, 800)
+            quantity = np.random.randint(1, 8)
+        else:
+            price = np.random.uniform(10, 200)
+            quantity = np.random.randint(1, 12)
+    else:
+        price = np.random.uniform(10, 2000)
+        quantity = np.random.randint(1, 12)
 
-    st.success("✅ Prédictions réussies !")
+    base_sales = price * quantity
+
+    # Ajustement temporel
+    if temp_choice == "Année":
+        base_sales *= np.random.uniform(30, 60)
+        quantity *= np.random.randint(20, 60)
+    elif temp_choice == "Année + Mois":
+        base_sales *= np.random.uniform(4, 8)
+        quantity *= np.random.randint(3, 8)
+
+    # Ajustement produit
+    if product_choice == "Par catégorie":
+        base_sales *= 1.5
+        quantity *= 1.3
+    elif product_choice == "Tous les produits":
+        base_sales *= 2
+        quantity *= 1.5
+
+    return round(base_sales, 2), int(quantity)
+
+# -------------------- BOUTON PREDICTION --------------------
+if st.button("📈 Prédire les Ventes et Quantités"):
+    sales, quantity = simulate_sales_quantity(category, subcategory, temp_choice, product_choice)
+
+    st.success("✅ Prédictions simulées avec succès !")
 
     st.markdown(f"""
-    ### Résultats de la prédiction :
-    - **Sales** prédit : 💰 `418.89 €`
-    - **Quantity** prédit : 📦 `31`
+    ### Résultats de la simulation :
+    - **Vente estimée** 💰 : `{sales} €`
+    - **Quantité estimée** 📦 : `{quantity}`
     """)
